@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>NetworkD3</title>
+<style>
+
+.node {
+  cursor: pointer;
+  stroke: #3182bd;
+  stroke-width: 1.5px;
+}
+
+.link {
+  fill: none;
+  stroke: #9ecae1;
+  stroke-width: 1.5px;
+}
+
+</style>
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+
+var categories = ["Target", "Entity", "Contact", "Account", "STR", "Address"]
+
+var colors = d3.scale.ordinal()
+                  .domain(categories)
+                  .range(["blue", "red", "orange", "green", "black", "purple"]);
+
+var width = 2000,
+    height = 1500,
+    root;
+
+var force = d3.layout.force()
+    .size([width, height])
+    .gravity(0)
+    .linkDistance(190)
+    .on("tick", tick);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+//Added markers to indicate that this is a directed graph
+svg.append("defs").selectAll("marker")
+    .data(["arrow"])
+    .enter().append("marker")
+    .attr("id", function(d) { return d; })
+    .attr("viewBox", "0 -5 10 10")
+    .attr("refX", 15)
+    .attr("refY", -1.5)
+    .attr("markerWidth", 13)
+    .attr("markerHeight", 13)
+    .attr("orient", "auto")
+    .append("path")
+    .attr("d", "M0,-5L10,0L0,5");
+
+// legend
+svg.selectAll("mydots")
+      .data(categories)
+      .enter()
+      .append("circle")
+        .attr("cx", 100)
+        .attr("cy", function(d,i){ return 100 + i*25}) // 100 is where the first dot appears. 25 is the distance between dots
+        .attr("r", 7)
+        .style("fill", function(d){ return colors(d)})
+
+svg.selectAll("mylabels")
+      .data(categories)
+      .enter()
+      .append("text")
+        .attr("x", 120)
+        .attr("y", function(d,i){ return 100 + i*25}) // 100 is where the first dot appears. 25 is the distance between dots
+        .style("fill", function(d){ return colors(d)})
+        .text(function(d){ return d})
+        .attr("text-anchor", "left")
+        .style("alignment-baseline", "middle")
+
+var link = svg.selectAll(".link"),
+    node = svg.selectAll(".node");
+
+var data = {
+    "nodes": [
+     {"x": 469, "y": 410, "label": "Target", "pName": "Ali", "NeoId": 0},
+     {"x": 493, "y": 364, "label": "Account", "pNo": 8888, "NeoId": 1},
+     {"x": 442, "y": 365, "label": "Entity", "pName": "Abu", "NeoId": 2},
+     {"x": 467, "y": 314, "label": "Entity", "pName": "Ah Seng", "NeoId": 3}
+ ],
+     "links": [
+      {"source":  0, "target":  1},
+      {"source":  1, "target":  2},
+      {"source":  2, "target":  0},
+      {"source":  1, "target":  3},
+      {"source":  3, "target":  2}
+  ]
+ }
+
+//create simple dict 
+var sampleDict = new Object();
+for (var i = 0; i<data.nodes.length; i++){
+    info = data.nodes[i]
+    sampleDict[info.NeoId] = info
+}
+
+start();
+
+function start() {
+  root = data;
+  //Give nodes ids and initialize variables
+  for(var i=0; i<root.nodes.length; i++) {
+    var node = root.nodes[i];
+    node.id = i;
+    node.collapsing = 0;
+    node.collapsed = false;
+  }
+  //Give links ids and initialize variables
+  for(var i=0; i<root.links.length; i++) {
+    var link = root.links[i];
+    link.source  = sampleDict[link.source];
+    link.target = sampleDict[link.target];
+    link.id = i;
+  }
+  update();
+};
+
+function update() {
+  //Keep only the visible nodes
+  var nodes = root.nodes.filter(function(d) {
+    return d.collapsing == 0;
+  });
+  var links = root.links;
+  //Keep only the visible links
+  links = root.links.filter(function(d) {
+    return d.source.collapsing == 0 && d.target.collapsing == 0;
+  });
+  // console.log(links)
+
+  force
+      .nodes(nodes)
+      .links(links)
+      .start();
+
+  // Update the links…
+  link = link.data(links, function(d) { return d.id; });
+
+  // Exit any old links.
+  link.exit().remove();
+
+  // Enter any new links.
+  link.enter().insert("line", ".node")
+      .attr("class", "link")
+      .attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; })
+      .attr("marker-end", "url(#arrow)");
+
+  // Update the nodes…
+  node = node.data(nodes, function(d){ return d.id; })
+            //  .style("fill", color);
+             .style("fill", function (d) {return colors(d.label);})
+
+  // Exit any old nodes.
+  node.exit().remove();
+
+  // Enter any new nodes.
+  node.enter().append("circle")
+        .attr("class", "node")
+        .attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; })
+        .attr("r", 7)
+        .style("fill", function (d) {return colors(d.label);})
+        .on("click", click)
+        .call(force.drag)
+
+    var myText = svg.selectAll(".mytext")
+                .data(nodes)
+                .enter()
+                .append("text");
+
+   myText.attr("dy", -3)
+          .text(function (d) {
+                if (d.label == "Entity"){
+                return d.pName}
+                else if (d.label == "Target"){
+                return d.pName}
+                else if (d.label == "Account"){
+                return ''}
+                else if (d.label == "STR"){
+                return ''}
+                else if (d.label == "Contact"){
+                return ''}
+                });
+}
+
+function tick() {
+  link.attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; });
+
+  node.attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; });
+}
+
+// Color leaf nodes orange, and packages white or blue.
+function color(d) {
+  return d.collapsed ? "#3182bd" : d.children ? "#c6dbef" : "#fd8d3c";
+}
+
+// Toggle children on click.
+function click(d) {
+  if (!d3.event.defaultPrevented) {
+    //check if link is from this node, and if so, collapse
+    root.links.forEach(function(l) {
+      if(l.source.id == d.id) {
+        if(d.collapsed){
+          l.target.collapsing--;
+        } else {
+          l.target.collapsing++;
+        }
+      }
+    });
+    d.collapsed = !d.collapsed;
+  }
+  update();
+}
+
+</script>
